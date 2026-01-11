@@ -1,0 +1,44 @@
+# ARGUS SKY Backend Dependencies
+# ==============================
+
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database - PostgreSQL (Supabase) & SQLite
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+aiosqlite==0.19.0
+greenlet==3.0.3
+
+# Supabase Client
+supabase==2.3.4
+
+# Data Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Async HTTP Client
+httpx==0.26.0
+aiohttp==3.9.1
+
+# Scheduling
+apscheduler==3.10.4
+
+# WebSocket
+websockets==12.0
+
+# Date/Time
+python-dateutil==2.8.2
+
+# JSON Processing
+orjson==3.9.10
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Utilities
+tenacity==8.2.3
