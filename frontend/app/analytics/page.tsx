@@ -222,7 +222,7 @@ interface KPICardProps {
   value: string;
   change?: number;
   suffix?: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: string | number; className?: string }>;
   positive?: boolean;
   isLoading?: boolean;
 }
