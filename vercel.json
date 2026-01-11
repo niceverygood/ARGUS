@@ -1,7 +1,4 @@
 {
-  "version": 2,
-  "framework": "nextjs",
-  "rootDirectory": "frontend",
   "env": {
     "NEXT_PUBLIC_API_URL": "https://argus-j2xa.onrender.com",
     "NEXT_PUBLIC_WS_URL": "wss://argus-j2xa.onrender.com/ws"
