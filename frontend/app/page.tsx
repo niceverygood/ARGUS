@@ -6,13 +6,15 @@ import { CategoryCards } from '@/components/dashboard/CategoryCards';
 import { TrendChart } from '@/components/dashboard/TrendChart';
 import { AlertFeed } from '@/components/dashboard/AlertFeed';
 import { ThreatMap } from '@/components/dashboard/ThreatMap';
+import { CategoryDetailModal } from '@/components/dashboard/CategoryDetailModal';
 import { useThreatIndex } from '@/hooks/useThreatIndex';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useThreats } from '@/hooks/useThreats';
-import { ThreatLevel } from '@/types';
+import { ThreatLevel, ThreatCategory } from '@/types';
 
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [selectedCategory, setSelectedCategory] = useState<ThreatCategory | null>(null);
   
   // 시간 범위에 따른 시간 계산
   const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720;
@@ -50,9 +52,17 @@ export default function DashboardPage() {
           <CategoryCards
             categories={categories}
             isLoading={isLoading}
+            onCategoryClick={setSelectedCategory}
           />
         </div>
       </div>
+
+      {/* 카테고리 상세 모달 */}
+      <CategoryDetailModal
+        category={selectedCategory}
+        isOpen={!!selectedCategory}
+        onClose={() => setSelectedCategory(null)}
+      />
 
       {/* 중단: 트렌드 + 알림 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

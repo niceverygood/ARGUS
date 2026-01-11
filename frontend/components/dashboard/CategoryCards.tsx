@@ -26,6 +26,7 @@ interface CategoryData {
 interface CategoryCardsProps {
   categories: CategoryData[];
   isLoading?: boolean;
+  onCategoryClick?: (category: ThreatCategory) => void;
 }
 
 const ICONS: Record<ThreatCategory, LucideIcon> = {
@@ -37,7 +38,7 @@ const ICONS: Record<ThreatCategory, LucideIcon> = {
   geopolitical: Globe,
 };
 
-export function CategoryCards({ categories, isLoading }: CategoryCardsProps) {
+export function CategoryCards({ categories, isLoading, onCategoryClick }: CategoryCardsProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -51,13 +52,18 @@ export function CategoryCards({ categories, isLoading }: CategoryCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
       {categories.map((cat, idx) => (
-        <CategoryCard key={cat.category} data={cat} index={idx} />
+        <CategoryCard 
+          key={cat.category} 
+          data={cat} 
+          index={idx} 
+          onClick={() => onCategoryClick?.(cat.category)}
+        />
       ))}
     </div>
   );
 }
 
-function CategoryCard({ data, index }: { data: CategoryData; index: number }) {
+function CategoryCard({ data, index, onClick }: { data: CategoryData; index: number; onClick?: () => void }) {
   const config = CATEGORY_CONFIG[data.category];
   const Icon = ICONS[data.category];
   const level = getThreatLevel(data.index);
@@ -74,6 +80,7 @@ function CategoryCard({ data, index }: { data: CategoryData; index: number }) {
         ${level === 5 ? 'animate-pulse border-argus-critical/50' : ''}
       `}
       whileHover={{ scale: 1.02, y: -2 }}
+      onClick={onClick}
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
