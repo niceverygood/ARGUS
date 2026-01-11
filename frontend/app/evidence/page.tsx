@@ -157,7 +157,7 @@ export default function EvidencePage() {
 
             {/* Source Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {sources?.sources && Object.entries(sources.sources).map(([key, source]) => (
+              {sources?.sources && Object.entries(sources.sources).map(([key, source]: [string, any]) => (
                 <motion.div
                   key={key}
                   initial={{ opacity: 0, y: 10 }}
@@ -181,6 +181,39 @@ export default function EvidencePage() {
                       <span>업데이트: {source.update_frequency}</span>
                     </div>
                   </div>
+                  {/* Examples */}
+                  {source.examples && (
+                    <div className="mt-3 pt-3 border-t border-argus-dark-border">
+                      <p className="text-xs text-argus-dark-muted mb-1">예시 출처:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {source.examples.map((ex: string) => (
+                          <span key={ex} className="text-xs px-2 py-0.5 bg-argus-dark-border rounded-full text-argus-dark-text">
+                            {ex}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Data Types */}
+                  {source.data_types && (
+                    <div className="mt-2">
+                      <p className="text-xs text-argus-dark-muted mb-1">수집 데이터:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {source.data_types.map((dt: string) => (
+                          <span key={dt} className="text-xs px-2 py-0.5 bg-argus-secondary/10 rounded-full text-argus-secondary">
+                            {dt}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Validation Method */}
+                  {source.validation_method && (
+                    <div className="mt-2 text-xs text-argus-dark-muted flex items-center gap-1">
+                      <CheckCircle size={10} className="text-argus-guarded" />
+                      검증: {source.validation_method}
+                    </div>
+                  )}
                   {/* Collection Stats */}
                   {collectionStats?.stats_by_source?.[key] && (
                     <div className="mt-3 pt-3 border-t border-argus-dark-border">
@@ -214,7 +247,7 @@ export default function EvidencePage() {
         onToggle={() => toggleSection('categories')}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {categories?.categories && Object.entries(categories.categories).map(([key, cat]) => (
+          {categories?.categories && Object.entries(categories.categories).map(([key, cat]: [string, any]) => (
             <motion.div
               key={key}
               initial={{ opacity: 0, y: 10 }}
@@ -240,6 +273,43 @@ export default function EvidencePage() {
                   />
                 </div>
               </div>
+
+              {/* Subcategories */}
+              {cat.subcategories && (
+                <div className="mt-3 pt-3 border-t border-argus-dark-border">
+                  <p className="text-xs text-argus-dark-muted mb-2">세부 유형:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {cat.subcategories.map((sub: string) => (
+                      <span key={sub} className="text-xs px-2 py-0.5 bg-argus-dark-border rounded-full text-argus-dark-text">
+                        {sub}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Risk Factors */}
+              {cat.risk_factors && (
+                <div className="mt-2">
+                  <p className="text-xs text-argus-dark-muted mb-1">위험 요소:</p>
+                  <ul className="text-xs text-argus-high space-y-0.5">
+                    {cat.risk_factors.map((rf: string) => (
+                      <li key={rf} className="flex items-center gap-1">
+                        <AlertTriangle size={10} />
+                        {rf}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Response Protocol */}
+              {cat.response_protocol && (
+                <div className="mt-2 text-xs p-2 bg-argus-dark-border/30 rounded-lg">
+                  <p className="text-argus-dark-muted mb-1">대응 프로토콜:</p>
+                  <p className="text-argus-dark-text">{cat.response_protocol}</p>
+                </div>
+              )}
             </motion.div>
           ))}
         </div>
@@ -256,27 +326,71 @@ export default function EvidencePage() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {levels?.levels && Object.entries(levels.levels)
             .sort(([a], [b]) => Number(a) - Number(b))
-            .map(([level, config]) => (
+            .map(([level, config]: [string, any]) => (
               <motion.div
                 key={level}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-argus-dark-card rounded-xl p-4 border border-argus-dark-border text-center"
+                className="bg-argus-dark-card rounded-xl p-4 border border-argus-dark-border"
                 style={{ borderColor: config.color + '40' }}
               >
-                <div 
-                  className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-lg font-bold"
-                  style={{ backgroundColor: config.color + '20', color: config.color }}
-                >
-                  {level}
+                <div className="text-center mb-4">
+                  <div 
+                    className="w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center text-xl font-bold"
+                    style={{ backgroundColor: config.color + '20', color: config.color }}
+                  >
+                    {level}
+                  </div>
+                  <h4 className="font-bold text-white text-lg">{config.name}</h4>
+                  <p className="text-sm font-mono mt-1" style={{ color: config.color }}>
+                    {config.min} - {config.max}
+                  </p>
                 </div>
-                <h4 className="font-medium text-white">{config.name}</h4>
-                <p className="text-xs text-argus-dark-muted mt-1">
-                  {config.min} - {config.max}
-                </p>
-                <p className="text-xs text-argus-dark-muted mt-2">
+
+                <p className="text-xs text-argus-dark-muted text-center mb-3">
                   {config.description}
                 </p>
+
+                {config.detailed_description && (
+                  <p className="text-xs text-argus-dark-text bg-argus-dark-border/30 p-2 rounded-lg mb-3">
+                    {config.detailed_description}
+                  </p>
+                )}
+
+                {/* Actions */}
+                {config.actions && (
+                  <div className="space-y-1 mb-3">
+                    <p className="text-xs text-argus-dark-muted">대응 조치:</p>
+                    <ul className="text-xs space-y-1">
+                      {config.actions.map((action: string, i: number) => (
+                        <li key={i} className="flex items-start gap-1 text-argus-dark-text">
+                          <span className="text-argus-secondary">•</span>
+                          {action}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Staff Alert */}
+                {config.staff_alert && (
+                  <div className="text-xs border-t border-argus-dark-border pt-2 mt-2">
+                    <div className="flex justify-between">
+                      <span className="text-argus-dark-muted">직원 상태:</span>
+                      <span style={{ color: config.color }}>{config.staff_alert}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Passenger Notice */}
+                {config.passenger_notice && (
+                  <div className="text-xs mt-1">
+                    <div className="flex justify-between">
+                      <span className="text-argus-dark-muted">승객 안내:</span>
+                      <span className="text-argus-dark-text text-right">{config.passenger_notice}</span>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             ))}
         </div>

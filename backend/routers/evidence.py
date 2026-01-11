@@ -17,7 +17,7 @@ from database import (
     SystemEventLog,
     ThreatIndexHistory
 )
-from config import DATA_SOURCES, CATEGORY_WEIGHTS, THREAT_LEVELS
+from config import DATA_SOURCES, CATEGORY_WEIGHTS, THREAT_LEVELS, SCORE_CALCULATION
 from services.threat_calculator import calculator
 
 router = APIRouter()
@@ -67,6 +67,18 @@ async def get_threat_levels():
     return {
         "levels": THREAT_LEVELS,
         "description": "위협 지수에 따른 경보 레벨 정의"
+    }
+
+
+@router.get("/calculation-formulas")
+async def get_calculation_formulas():
+    """
+    점수 계산 공식 정보 조회
+    - 위협 점수 계산에 사용되는 모든 공식과 변수 설명
+    """
+    return {
+        "formulas": SCORE_CALCULATION,
+        "description": "위협 점수 및 지수 계산에 사용되는 공식 정보"
     }
 
 
