@@ -1,6 +1,7 @@
 """
 ARGUS SKY - Simulation Scheduler
 데모용 실시간 데이터 시뮬레이션 스케줄러
+AI 추론 로그 기록 포함
 """
 import asyncio
 import random
@@ -31,6 +32,8 @@ class SimulationScheduler:
             "geopolitical": 40.0,
         }
         self._active_threats: list = []
+        self._collection_logs: list = []  # 데이터 수집 로그
+        self._ai_reasoning_logs: list = []  # AI 추론 로그
         self._is_running: bool = False
         self._demo_mode_active: bool = False
     
@@ -80,8 +83,8 @@ class SimulationScheduler:
             print("[Scheduler] Simulation scheduler stopped.")
     
     async def _initialize_threats(self):
-        """초기 위협 데이터 생성"""
-        print("[Scheduler] Initializing threat data...")
+        """초기 위협 데이터 생성 (AI 추론 로그 포함)"""
+        print("[Scheduler] Initializing threat data with AI reasoning logs...")
         
         # 카테고리별 2-3개씩 위협 생성
         for category in self._category_indices.keys():
@@ -89,8 +92,21 @@ class SimulationScheduler:
             for _ in range(count):
                 threat = simulator.generate_threat(category)
                 self._active_threats.append(threat)
+                
+                # 데이터 수집 로그 생성
+                collection_log = simulator.generate_data_collection_log(threat)
+                self._collection_logs.append(collection_log)
+                
+                # AI 추론 로그 생성
+                ai_log = simulator.generate_ai_reasoning_log(threat, collection_log)
+                self._ai_reasoning_logs.append(ai_log)
+        
+        # 최대 100개 로그 유지
+        self._collection_logs = self._collection_logs[-100:]
+        self._ai_reasoning_logs = self._ai_reasoning_logs[-100:]
         
         print(f"[Scheduler] Created {len(self._active_threats)} initial threats")
+        print(f"[Scheduler] Generated {len(self._ai_reasoning_logs)} AI reasoning logs")
     
     async def _update_threat_index(self):
         """위협 지수 업데이트 및 브로드캐스트"""
@@ -130,7 +146,7 @@ class SimulationScheduler:
             print(f"[Scheduler] Error updating threat index: {e}")
     
     async def _generate_new_threat(self):
-        """새 위협 생성 및 알림"""
+        """새 위협 생성 및 알림 (AI 추론 로그 포함)"""
         try:
             # 20% 확률로 새 위협 생성
             if random.random() > 0.2:
@@ -140,9 +156,21 @@ class SimulationScheduler:
             threat = simulator.generate_threat()
             self._active_threats.append(threat)
             
+            # 데이터 수집 로그 생성
+            collection_log = simulator.generate_data_collection_log(threat)
+            self._collection_logs.append(collection_log)
+            
+            # AI 추론 로그 생성
+            ai_log = simulator.generate_ai_reasoning_log(threat, collection_log)
+            self._ai_reasoning_logs.append(ai_log)
+            
             # 최대 50개 유지
             if len(self._active_threats) > 50:
                 self._active_threats = self._active_threats[-50:]
+            if len(self._collection_logs) > 100:
+                self._collection_logs = self._collection_logs[-100:]
+            if len(self._ai_reasoning_logs) > 100:
+                self._ai_reasoning_logs = self._ai_reasoning_logs[-100:]
             
             # WebSocket으로 새 위협 전송
             await manager.send_new_threat(threat)
@@ -157,6 +185,7 @@ class SimulationScheduler:
                 )
             
             print(f"[Scheduler] New threat generated: {threat['title'][:30]}...")
+            print(f"[Scheduler] AI reasoning log created for threat")
             
         except Exception as e:
             print(f"[Scheduler] Error generating new threat: {e}")
@@ -337,6 +366,31 @@ class SimulationScheduler:
     def get_threats(self, limit: int = 50) -> list:
         """현재 활성 위협 목록 반환"""
         return self._active_threats[-limit:]
+    
+    def get_collection_logs(self, limit: int = 50) -> list:
+        """데이터 수집 로그 반환"""
+        return self._collection_logs[-limit:]
+    
+    def get_ai_reasoning_logs(self, limit: int = 50, threat_id: str = None) -> list:
+        """AI 추론 로그 반환"""
+        logs = self._ai_reasoning_logs[-limit:]
+        if threat_id:
+            logs = [log for log in logs if log.get("threat_id") == threat_id]
+        return logs
+    
+    def get_ai_reasoning_log_by_id(self, log_id: str) -> dict:
+        """특정 AI 추론 로그 반환"""
+        for log in self._ai_reasoning_logs:
+            if log.get("id") == log_id:
+                return log
+        return None
+    
+    def get_collection_log_by_id(self, log_id: str) -> dict:
+        """특정 데이터 수집 로그 반환"""
+        for log in self._collection_logs:
+            if log.get("id") == log_id:
+                return log
+        return None
 
 
 # 싱글톤 인스턴스

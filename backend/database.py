@@ -273,6 +273,51 @@ class DemoScenarioLog(Base):
     executed_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class AIReasoningLog(Base):
+    """AI 추론 로그 - AI가 데이터를 어떻게 분석하고 추론했는지 기록"""
+    __tablename__ = "ai_reasoning_logs"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    threat_id = Column(String(36), ForeignKey("threats.id"), nullable=True, index=True)
+    collection_log_id = Column(String(36), ForeignKey("data_collection_logs.id"), nullable=True)
+    
+    # Input Data
+    raw_input = Column(Text)  # Original raw data that was analyzed
+    input_source = Column(String(100))  # Where the data came from
+    input_type = Column(String(50))  # news_article, social_post, sensor_data, etc.
+    
+    # AI Processing Steps
+    ai_model = Column(String(100))  # gpt-4, claude, rule-based, etc.
+    processing_steps = Column(JSON, default=list)  # Step-by-step reasoning chain
+    
+    # Entity Extraction
+    entities_extracted = Column(JSON, default=dict)  # people, orgs, locations, dates
+    keywords_extracted = Column(JSON, default=list)
+    
+    # Classification & Reasoning
+    category_reasoning = Column(Text)  # Why this category was chosen
+    category_confidence = Column(Float)  # Confidence in category classification
+    severity_reasoning = Column(Text)  # Why this severity level
+    severity_confidence = Column(Float)
+    
+    # Threat Assessment
+    threat_indicators = Column(JSON, default=list)  # What indicators suggest a threat
+    risk_factors = Column(JSON, default=list)  # Identified risk factors
+    mitigating_factors = Column(JSON, default=list)  # Factors that reduce risk
+    
+    # Final Assessment
+    overall_assessment = Column(Text)  # AI's final assessment summary
+    recommendation = Column(Text)  # Recommended actions
+    confidence_score = Column(Float)  # Overall confidence in assessment
+    
+    # Processing Metadata
+    processing_time_ms = Column(Integer)
+    tokens_used = Column(Integer, nullable=True)  # If using LLM
+    model_version = Column(String(50), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 # =============================================================================
 # Database Functions
 # =============================================================================
@@ -351,6 +396,38 @@ async def log_system_event(
         event_type=event_type,
         event_category=event_category,
         description=description,
+        **kwargs
+    )
+    session.add(log)
+    return log
+
+
+async def log_ai_reasoning(
+    session: AsyncSession,
+    raw_input: str,
+    input_source: str,
+    input_type: str,
+    ai_model: str,
+    processing_steps: list,
+    category_reasoning: str,
+    severity_reasoning: str,
+    overall_assessment: str,
+    threat_id: str = None,
+    collection_log_id: str = None,
+    **kwargs
+):
+    """AI 추론 로그 기록"""
+    log = AIReasoningLog(
+        threat_id=threat_id,
+        collection_log_id=collection_log_id,
+        raw_input=raw_input,
+        input_source=input_source,
+        input_type=input_type,
+        ai_model=ai_model,
+        processing_steps=processing_steps,
+        category_reasoning=category_reasoning,
+        severity_reasoning=severity_reasoning,
+        overall_assessment=overall_assessment,
         **kwargs
     )
     session.add(log)

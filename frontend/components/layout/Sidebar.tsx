@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Activity,
   Database,
+  Brain,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ThreatLevel } from '@/types';
@@ -29,6 +30,7 @@ const menuItems = [
   { href: '/threats', icon: AlertTriangle, label: '위협 목록' },
   { href: '/analytics', icon: BarChart3, label: '분석 리포트' },
   { href: '/evidence', icon: Database, label: '데이터 근거' },
+  { href: '/logs', icon: Brain, label: 'AI 분석 로그' },
   { href: '/map', icon: Map, label: '지도 뷰' },
   { href: '/settings', icon: Settings, label: '설정' },
 ];

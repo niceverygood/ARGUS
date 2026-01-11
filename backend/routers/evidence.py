@@ -15,10 +15,12 @@ from database import (
     DataCollectionLog, 
     ScoreCalculationLog, 
     SystemEventLog,
-    ThreatIndexHistory
+    ThreatIndexHistory,
+    AIReasoningLog
 )
 from config import DATA_SOURCES, CATEGORY_WEIGHTS, THREAT_LEVELS, SCORE_CALCULATION
 from services.threat_calculator import calculator
+from services.simulation_scheduler import scheduler
 
 router = APIRouter()
 
@@ -403,6 +405,212 @@ async def get_system_logs(
         } for log in logs],
         "total_count": len(logs),
         "time_range_hours": hours
+    }
+
+
+# =============================================================================
+# AI Reasoning Logs
+# =============================================================================
+
+@router.get("/logs/ai-reasoning")
+async def get_ai_reasoning_logs(
+    threat_id: Optional[str] = None,
+    input_source: Optional[str] = None,
+    hours: int = Query(default=24, le=168),
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    AI 추론 로그 조회
+    - AI가 데이터를 어떻게 분석하고 추론했는지 확인
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+    
+    query = select(AIReasoningLog).where(
+        AIReasoningLog.created_at >= since
+    ).order_by(desc(AIReasoningLog.created_at)).limit(limit)
+    
+    if threat_id:
+        query = query.where(AIReasoningLog.threat_id == threat_id)
+    if input_source:
+        query = query.where(AIReasoningLog.input_source == input_source)
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    return {
+        "logs": [{
+            "id": log.id,
+            "threat_id": log.threat_id,
+            "raw_input": log.raw_input[:500] + "..." if log.raw_input and len(log.raw_input) > 500 else log.raw_input,
+            "input_source": log.input_source,
+            "input_type": log.input_type,
+            "ai_model": log.ai_model,
+            "processing_steps": log.processing_steps,
+            "entities_extracted": log.entities_extracted,
+            "keywords_extracted": log.keywords_extracted,
+            "category_reasoning": log.category_reasoning,
+            "category_confidence": log.category_confidence,
+            "severity_reasoning": log.severity_reasoning,
+            "severity_confidence": log.severity_confidence,
+            "threat_indicators": log.threat_indicators,
+            "risk_factors": log.risk_factors,
+            "mitigating_factors": log.mitigating_factors,
+            "overall_assessment": log.overall_assessment,
+            "recommendation": log.recommendation,
+            "confidence_score": log.confidence_score,
+            "processing_time_ms": log.processing_time_ms,
+            "created_at": log.created_at
+        } for log in logs],
+        "total_count": len(logs),
+        "time_range_hours": hours
+    }
+
+
+@router.get("/logs/ai-reasoning/{log_id}")
+async def get_ai_reasoning_detail(
+    log_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    특정 AI 추론 로그 상세 조회
+    """
+    result = await db.execute(
+        select(AIReasoningLog).where(AIReasoningLog.id == log_id)
+    )
+    log = result.scalar_one_or_none()
+    
+    if not log:
+        raise HTTPException(status_code=404, detail="AI reasoning log not found")
+    
+    # Get associated threat if exists
+    threat_info = None
+    if log.threat_id:
+        threat_result = await db.execute(
+            select(Threat).where(Threat.id == log.threat_id)
+        )
+        threat = threat_result.scalar_one_or_none()
+        if threat:
+            threat_info = {
+                "id": threat.id,
+                "title": threat.title,
+                "category": threat.category,
+                "severity": threat.severity,
+                "threat_score": threat.threat_score
+            }
+    
+    return {
+        "log": {
+            "id": log.id,
+            "threat_id": log.threat_id,
+            "threat_info": threat_info,
+            "collection_log_id": log.collection_log_id,
+            "raw_input": log.raw_input,  # Full raw input
+            "input_source": log.input_source,
+            "input_type": log.input_type,
+            "ai_model": log.ai_model,
+            "model_version": log.model_version,
+            "processing_steps": log.processing_steps,
+            "entities_extracted": log.entities_extracted,
+            "keywords_extracted": log.keywords_extracted,
+            "category_reasoning": log.category_reasoning,
+            "category_confidence": log.category_confidence,
+            "severity_reasoning": log.severity_reasoning,
+            "severity_confidence": log.severity_confidence,
+            "threat_indicators": log.threat_indicators,
+            "risk_factors": log.risk_factors,
+            "mitigating_factors": log.mitigating_factors,
+            "overall_assessment": log.overall_assessment,
+            "recommendation": log.recommendation,
+            "confidence_score": log.confidence_score,
+            "processing_time_ms": log.processing_time_ms,
+            "tokens_used": log.tokens_used,
+            "created_at": log.created_at
+        }
+    }
+
+
+# =============================================================================
+# Simulated Logs (In-Memory - from Scheduler)
+# =============================================================================
+
+@router.get("/logs/simulated/collection")
+async def get_simulated_collection_logs(
+    limit: int = Query(default=50, le=100)
+):
+    """
+    시뮬레이션 데이터 수집 로그 조회 (메모리 기반)
+    - 실시간 시뮬레이션에서 생성된 데이터 수집 기록
+    """
+    logs = scheduler.get_collection_logs(limit=limit)
+    return {
+        "logs": logs,
+        "total_count": len(logs),
+        "source": "in-memory simulation"
+    }
+
+
+@router.get("/logs/simulated/ai-reasoning")
+async def get_simulated_ai_reasoning_logs(
+    threat_id: Optional[str] = None,
+    limit: int = Query(default=50, le=100)
+):
+    """
+    시뮬레이션 AI 추론 로그 조회 (메모리 기반)
+    - 실시간 시뮬레이션에서 생성된 AI 분석 과정 기록
+    """
+    logs = scheduler.get_ai_reasoning_logs(limit=limit, threat_id=threat_id)
+    return {
+        "logs": logs,
+        "total_count": len(logs),
+        "source": "in-memory simulation"
+    }
+
+
+@router.get("/logs/simulated/ai-reasoning/{log_id}")
+async def get_simulated_ai_reasoning_detail(log_id: str):
+    """
+    특정 시뮬레이션 AI 추론 로그 상세 조회
+    """
+    log = scheduler.get_ai_reasoning_log_by_id(log_id)
+    
+    if not log:
+        raise HTTPException(status_code=404, detail="AI reasoning log not found")
+    
+    # 연관된 위협 정보 찾기
+    threats = scheduler.get_threats(limit=100)
+    threat_info = None
+    for threat in threats:
+        if threat.get("id") == log.get("threat_id"):
+            threat_info = {
+                "id": threat.get("id"),
+                "title": threat.get("title"),
+                "category": threat.get("category"),
+                "severity": threat.get("severity"),
+                "credibility": threat.get("credibility")
+            }
+            break
+    
+    return {
+        "log": log,
+        "threat_info": threat_info,
+        "source": "in-memory simulation"
+    }
+
+
+@router.get("/logs/simulated/collection/{log_id}")
+async def get_simulated_collection_detail(log_id: str):
+    """
+    특정 시뮬레이션 데이터 수집 로그 상세 조회
+    """
+    log = scheduler.get_collection_log_by_id(log_id)
+    
+    if not log:
+        raise HTTPException(status_code=404, detail="Collection log not found")
+    
+    return {
+        "log": log,
+        "source": "in-memory simulation"
     }
 
 
