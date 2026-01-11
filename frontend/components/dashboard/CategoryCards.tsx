@@ -71,6 +71,9 @@ function CategoryCard({ data, index, onClick }: { data: CategoryData; index: num
   
   return (
     <motion.div
+      role="button"
+      tabIndex={0}
+      aria-label={`${config.name} - 위협 지수 ${Math.round(data.index)}, ${data.threatCount}건`}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08 }}
@@ -81,6 +84,7 @@ function CategoryCard({ data, index, onClick }: { data: CategoryData; index: num
       `}
       whileHover={{ scale: 1.02, y: -2 }}
       onClick={onClick}
+      onKeyDown={(e) => e.key === 'Enter' && onClick?.()}
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
