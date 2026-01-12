@@ -4,6 +4,8 @@
   "outputDirectory": ".next",
   "env": {
     "NEXT_PUBLIC_API_URL": "https://argus-j2xa.onrender.com",
-    "NEXT_PUBLIC_WS_URL": "wss://argus-j2xa.onrender.com/ws"
+    "NEXT_PUBLIC_WS_URL": "wss://argus-j2xa.onrender.com/ws",
+    "NEXT_PUBLIC_NODE_API_URL": "http://localhost:3001/api",
+    "NEXT_PUBLIC_ACTIVE_BACKEND": "python"
   }
 }

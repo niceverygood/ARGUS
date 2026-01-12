@@ -56,8 +56,16 @@ export const INCHEON_AIRPORT = {
 
 // ============ API Endpoints ============
 // 환경변수에서 가져오거나 기본값 사용
+
+// Python FastAPI 백엔드 (포트 8001)
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8001/ws';
+
+// Node.js Express 백엔드 (포트 3001)
+export const NODE_API_URL = process.env.NEXT_PUBLIC_NODE_API_URL || 'http://localhost:3001/api';
+
+// 사용할 백엔드 선택 ('python' | 'node')
+export const ACTIVE_BACKEND = (process.env.NEXT_PUBLIC_ACTIVE_BACKEND || 'python') as 'python' | 'node';
 
 // ============ Time Ranges ============
 export const TIME_RANGES = [

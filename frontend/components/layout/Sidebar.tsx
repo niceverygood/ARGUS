@@ -16,6 +16,7 @@ import {
   Activity,
   Database,
   Brain,
+  Video,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ThreatLevel } from '@/types';
@@ -28,6 +29,7 @@ interface SidebarProps {
 const menuItems = [
   { href: '/', icon: LayoutDashboard, label: '대시보드' },
   { href: '/threats', icon: AlertTriangle, label: '위협 목록' },
+  { href: '/cctv', icon: Video, label: 'CCTV 시뮬레이터' },
   { href: '/analytics', icon: BarChart3, label: '분석 리포트' },
   { href: '/evidence', icon: Database, label: '데이터 근거' },
   { href: '/logs', icon: Brain, label: 'AI 분석 로그' },

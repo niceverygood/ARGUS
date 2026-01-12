@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useAnalytics, useTrend } from '@/hooks/useArgusAPI';
 import { TrendChart } from '@/components/dashboard/TrendChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,41 +30,106 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { CATEGORY_CONFIG } from '@/lib/constants';
+import { CATEGORY_CONFIG, ACTIVE_BACKEND } from '@/lib/constants';
+import { ThreatCategory } from '@/types';
 
 const COLORS = ['#D32F2F', '#7B1FA2', '#1976D2', '#00796B', '#F57C00', '#5D4037'];
+
+// Node.js 카테고리를 ThreatCategory로 변환
+function nodeCategoryToType(nodeCategory: string): ThreatCategory {
+  const mapping: Record<string, ThreatCategory> = {
+    'TERROR': 'terror',
+    'CYBER': 'cyber',
+    'SMUGGLING': 'smuggling',
+    'DRONE': 'drone',
+    'INSIDER': 'insider',
+    'GEOPOLITICAL': 'geopolitical',
+  };
+  return mapping[nodeCategory] || 'terror';
+}
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
   const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720;
+  
+  const useNodeBackend = ACTIVE_BACKEND === 'node';
 
-  // KPI 데이터
-  const { data: kpi, isLoading: kpiLoading } = useQuery({
+  // Python 백엔드 데이터
+  const { data: pythonKpi, isLoading: pythonKpiLoading } = useQuery({
     queryKey: ['kpi'],
     queryFn: api.getKPI,
     staleTime: 30000,
+    enabled: !useNodeBackend,
   });
 
-  // 트렌드 데이터
-  const { data: trend = [], isLoading: trendLoading } = useQuery({
+  const { data: pythonTrend = [], isLoading: pythonTrendLoading } = useQuery({
     queryKey: ['trend', hours],
     queryFn: () => api.getTrend(hours),
     staleTime: 60000,
+    enabled: !useNodeBackend,
   });
 
-  // 카테고리 분포
-  const { data: distribution = [], isLoading: distLoading } = useQuery({
+  const { data: pythonDistribution = [], isLoading: pythonDistLoading } = useQuery({
     queryKey: ['distribution'],
     queryFn: api.getCategoryDistribution,
     staleTime: 60000,
+    enabled: !useNodeBackend,
   });
 
-  // 소스 통계
-  const { data: sourceStats = [], isLoading: sourceLoading } = useQuery({
+  const { data: pythonSourceStats = [], isLoading: pythonSourceLoading } = useQuery({
     queryKey: ['sourceStats'],
     queryFn: api.getSourceStats,
     staleTime: 60000,
+    enabled: !useNodeBackend,
   });
+
+  // Node.js 백엔드 데이터
+  const nodeAnalytics = useAnalytics({ period: timeRange });
+  const nodeTrend = useTrend({ period: timeRange });
+
+  // Node.js 데이터를 기존 형식으로 변환
+  const nodeKpi = useMemo(() => {
+    if (!nodeAnalytics.data) return null;
+    return {
+      avg_threat_index: nodeAnalytics.data.averageIndex,
+      total_threats_detected: nodeAnalytics.data.totalThreats,
+      resolved_rate: nodeAnalytics.data.resolutionRate,
+      avg_response_time_minutes: parseFloat(nodeAnalytics.data.averageResponseTime) * 60 || 150,
+      change_vs_yesterday: nodeAnalytics.data.trend.change,
+    };
+  }, [nodeAnalytics.data]);
+
+  const nodeDistribution = useMemo(() => {
+    if (!nodeAnalytics.data?.categoryDistribution) return [];
+    
+    const total = Object.values(nodeAnalytics.data.categoryDistribution).reduce((a, b) => a + b, 0);
+    
+    return Object.entries(nodeAnalytics.data.categoryDistribution).map(([category, count]) => ({
+      category: nodeCategoryToType(category),
+      count,
+      percentage: total > 0 ? (count / total) * 100 : 0,
+    }));
+  }, [nodeAnalytics.data]);
+
+  const nodeTrendData = useMemo(() => {
+    if (!nodeTrend.data) return [];
+    
+    return nodeTrend.data.map(point => ({
+      timestamp: point.timestamp,
+      total_index: point.totalIndex,
+      ...point.categories,
+    }));
+  }, [nodeTrend.data]);
+
+  // 실제 사용할 데이터 선택
+  const kpi = useNodeBackend ? nodeKpi : pythonKpi;
+  const kpiLoading = useNodeBackend ? nodeAnalytics.loading : pythonKpiLoading;
+  const trend = useNodeBackend ? nodeTrendData : pythonTrend;
+  const trendLoading = useNodeBackend ? nodeTrend.loading : pythonTrendLoading;
+  const distribution = useNodeBackend ? nodeDistribution : pythonDistribution;
+  const distLoading = useNodeBackend ? nodeAnalytics.loading : pythonDistLoading;
+  const sourceStats = pythonSourceStats; // Node.js는 소스 통계가 없음
+  const sourceLoading = pythonSourceLoading;
 
   return (
     <div className="space-y-6">

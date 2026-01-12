@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Database, 
   FileText, 
@@ -16,44 +16,253 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
-  Info
+  Info,
+  Play,
+  Loader2,
+  Zap,
+  Target,
+  TrendingUp
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useEvidence, NODE_API_URL } from '@/hooks/useArgusAPI';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import { ACTIVE_BACKEND, CATEGORY_CONFIG } from '@/lib/constants';
+
+// Analysis state types
+interface AnalysisStep {
+  step: number;
+  name: string;
+  status: 'pending' | 'running' | 'complete' | 'error';
+  count?: number;
+  threats?: number;
+}
+
+interface DetectedThreat {
+  index: number;
+  total: number;
+  title: string;
+  category: string;
+  severity: number;
+}
+
+interface AnalysisResult {
+  totalIndex: number;
+  threatLevel: { label: string; color: string } | null;
+  newThreats: number;
+  totalThreats: number;
+}
 
 export default function EvidencePage() {
   const [expandedSection, setExpandedSection] = useState<string | null>('sources');
   const [selectedHours, setSelectedHours] = useState(24);
+  const queryClient = useQueryClient();
+  
+  // Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisSteps, setAnalysisSteps] = useState<AnalysisStep[]>([
+    { step: 1, name: '데이터 수집', status: 'pending' },
+    { step: 2, name: 'AI 분석', status: 'pending' },
+    { step: 3, name: '점수 계산', status: 'pending' },
+    { step: 4, name: '위협 지수 산출', status: 'pending' },
+  ]);
+  const [detectedThreats, setDetectedThreats] = useState<DetectedThreat[]>([]);
+  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  
+  const useNodeBackend = ACTIVE_BACKEND === 'node';
+  
+  // Start real-time analysis
+  const startAnalysis = useCallback(() => {
+    setIsAnalyzing(true);
+    setDetectedThreats([]);
+    setAnalysisProgress({ current: 0, total: 0 });
+    setAnalysisResult(null);
+    setAnalysisSteps([
+      { step: 1, name: '데이터 수집', status: 'pending' },
+      { step: 2, name: 'AI 분석', status: 'pending' },
+      { step: 3, name: '점수 계산', status: 'pending' },
+      { step: 4, name: '위협 지수 산출', status: 'pending' },
+    ]);
+    
+    const eventSource = new EventSource(`${NODE_API_URL}/analyze/stream`);
+    
+    eventSource.addEventListener('start', (e) => {
+      console.log('[Analysis] Started:', JSON.parse(e.data));
+    });
+    
+    eventSource.addEventListener('step', (e) => {
+      const data = JSON.parse(e.data);
+      setAnalysisSteps(prev => prev.map(step => 
+        step.step === data.step 
+          ? { ...step, status: data.status, count: data.count, threats: data.threats }
+          : step
+      ));
+    });
+    
+    eventSource.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data);
+      setAnalysisProgress({ current: data.index, total: data.total });
+    });
+    
+    eventSource.addEventListener('threat', (e) => {
+      const data = JSON.parse(e.data);
+      setAnalysisProgress({ current: data.index, total: data.total });
+      setDetectedThreats(prev => [...prev, data]);
+    });
+    
+    eventSource.addEventListener('complete', (e) => {
+      const data = JSON.parse(e.data);
+      setAnalysisResult(data);
+      setIsAnalyzing(false);
+      eventSource.close();
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['node-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['node-threats'] });
+    });
+    
+    eventSource.addEventListener('error', (e) => {
+      console.error('[Analysis] Error:', e);
+      setIsAnalyzing(false);
+      eventSource.close();
+    });
+    
+    eventSource.onerror = () => {
+      setIsAnalyzing(false);
+      eventSource.close();
+    };
+  }, [queryClient]);
 
-  // Fetch all evidence data
-  const { data: sources, isLoading: sourcesLoading } = useQuery({
+  // Python 백엔드 데이터
+  const { data: pythonSources, isLoading: pythonSourcesLoading } = useQuery({
     queryKey: ['dataSources'],
     queryFn: api.getDataSources,
+    enabled: !useNodeBackend,
   });
 
-  const { data: categories } = useQuery({
+  const { data: pythonCategories } = useQuery({
     queryKey: ['categoryInfo'],
     queryFn: api.getCategoryInfo,
+    enabled: !useNodeBackend,
   });
 
-  const { data: levels } = useQuery({
+  const { data: pythonLevels } = useQuery({
     queryKey: ['threatLevels'],
     queryFn: api.getThreatLevels,
+    enabled: !useNodeBackend,
   });
 
-  const { data: summary, refetch: refetchSummary } = useQuery({
+  const { data: pythonSummary, refetch: refetchPythonSummary } = useQuery({
     queryKey: ['evidenceSummary', selectedHours],
     queryFn: () => api.getEvidenceSummary(selectedHours),
     refetchInterval: 30000,
+    enabled: !useNodeBackend,
   });
 
-  const { data: collectionStats } = useQuery({
+  const { data: pythonCollectionStats } = useQuery({
     queryKey: ['collectionStats', selectedHours],
     queryFn: () => api.getCollectionStats(selectedHours),
+    enabled: !useNodeBackend,
   });
+
+  // Node.js 백엔드 데이터
+  const nodeEvidence = useEvidence();
+
+  // Node.js 데이터를 기존 형식으로 변환
+  const nodeSourcesConverted = useMemo(() => {
+    if (!nodeEvidence.data) return null;
+    
+    const sourcesObj: Record<string, {
+      name: string;
+      credibility: number;
+      description: string;
+      collection_method: string;
+      update_frequency: string;
+    }> = {};
+    
+    Object.entries(nodeEvidence.data.sourceCredibility || {}).forEach(([key, cred]) => {
+      sourcesObj[key] = {
+        name: key.charAt(0).toUpperCase() + key.slice(1),
+        credibility: cred,
+        description: `${key} 데이터 출처`,
+        collection_method: 'API 호출',
+        update_frequency: '실시간',
+      };
+    });
+    
+    return {
+      sources: sourcesObj,
+      credibility_scale: {
+        '0.8-1.0': '매우 높음',
+        '0.6-0.8': '높음',
+        '0.4-0.6': '보통',
+        '0.2-0.4': '낮음',
+        '0.0-0.2': '매우 낮음',
+      },
+    };
+  }, [nodeEvidence.data]);
+
+  const nodeCategoriesConverted = useMemo(() => {
+    if (!nodeEvidence.data?.categories) return null;
+    
+    const categoriesObj: Record<string, {
+      name: string;
+      weight: number;
+      description: string;
+    }> = {};
+    
+    Object.entries(nodeEvidence.data.categories).forEach(([key, cat]) => {
+      categoriesObj[key.toLowerCase()] = {
+        name: cat.name,
+        weight: cat.weight,
+        description: cat.description,
+      };
+    });
+    
+    return { categories: categoriesObj };
+  }, [nodeEvidence.data]);
+
+  const nodeLevelsConverted = useMemo(() => {
+    if (!nodeEvidence.data?.levels) return null;
+    
+    const levelsObj: Record<string, {
+      name: string;
+      min: number;
+      max: number;
+      color: string;
+      description: string;
+    }> = {};
+    
+    const levelOrder = ['LOW', 'GUARDED', 'ELEVATED', 'HIGH', 'CRITICAL'];
+    levelOrder.forEach((levelKey, idx) => {
+      const levelData = nodeEvidence.data?.levels?.[levelKey];
+      if (levelData) {
+        levelsObj[String(idx + 1)] = {
+          name: levelData.label || levelKey,
+          min: levelData.min,
+          max: levelData.max,
+          color: levelData.color,
+          description: levelData.description,
+        };
+      }
+    });
+    
+    return { levels: levelsObj };
+  }, [nodeEvidence.data]);
+
+  // 실제 사용할 데이터 선택
+  const sources = useNodeBackend ? nodeSourcesConverted : pythonSources;
+  const sourcesLoading = useNodeBackend ? nodeEvidence.loading : pythonSourcesLoading;
+  const categories = useNodeBackend ? nodeCategoriesConverted : pythonCategories;
+  const levels = useNodeBackend ? nodeLevelsConverted : pythonLevels;
+  const summary = pythonSummary; // Node.js는 요약 데이터가 없음
+  const collectionStats = pythonCollectionStats;
+  
+  const refetchSummary = useNodeBackend ? () => {} : refetchPythonSummary;
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -91,8 +300,173 @@ export default function EvidencePage() {
             <RefreshCw size={14} />
             새로고침
           </Button>
+          <Button
+            onClick={startAnalysis}
+            disabled={isAnalyzing}
+            className="gap-2 bg-argus-primary hover:bg-argus-primary/90"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                분석 중...
+              </>
+            ) : (
+              <>
+                <Play size={14} />
+                분석 시작
+              </>
+            )}
+          </Button>
         </div>
       </div>
+      
+      {/* Real-time Analysis Panel */}
+      <AnimatePresence>
+        {(isAnalyzing || analysisResult) && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mb-6"
+          >
+            <Card className="bg-gradient-to-br from-argus-dark-card to-argus-dark-card/50 border-argus-primary/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="text-argus-primary" size={20} />
+                    실시간 분석
+                  </div>
+                  {isAnalyzing && (
+                    <Badge variant="outline" className="animate-pulse">
+                      진행 중
+                    </Badge>
+                  )}
+                  {analysisResult && !isAnalyzing && (
+                    <Badge className="bg-argus-success/20 text-argus-success border-0">
+                      완료
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Analysis Steps */}
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  {analysisSteps.map((step) => (
+                    <div 
+                      key={step.step}
+                      className={`p-3 rounded-lg border ${
+                        step.status === 'complete' ? 'bg-argus-success/10 border-argus-success/30' :
+                        step.status === 'running' ? 'bg-argus-primary/10 border-argus-primary/30' :
+                        'bg-argus-dark-border/20 border-argus-dark-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        {step.status === 'complete' ? (
+                          <CheckCircle size={14} className="text-argus-success" />
+                        ) : step.status === 'running' ? (
+                          <Loader2 size={14} className="text-argus-primary animate-spin" />
+                        ) : (
+                          <Clock size={14} className="text-argus-dark-muted" />
+                        )}
+                        <span className="text-xs text-argus-dark-muted">Step {step.step}</span>
+                      </div>
+                      <p className="font-medium text-white text-sm">{step.name}</p>
+                      {step.count !== undefined && (
+                        <p className="text-xs text-argus-secondary mt-1">{step.count}건 수집</p>
+                      )}
+                      {step.threats !== undefined && (
+                        <p className="text-xs text-argus-warning mt-1">{step.threats}건 탐지</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Progress Bar */}
+                {isAnalyzing && analysisProgress.total > 0 && (
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs text-argus-dark-muted mb-1">
+                      <span>AI 분석 진행률</span>
+                      <span>{analysisProgress.current} / {analysisProgress.total}</span>
+                    </div>
+                    <Progress 
+                      value={(analysisProgress.current / analysisProgress.total) * 100} 
+                      className="h-2"
+                    />
+                  </div>
+                )}
+                
+                {/* Detected Threats */}
+                {detectedThreats.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-argus-dark-muted mb-2 flex items-center gap-1">
+                      <Target size={12} />
+                      탐지된 위협 ({detectedThreats.length}건)
+                    </p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {detectedThreats.slice(-10).map((threat, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex items-center justify-between bg-argus-dark-bg rounded-lg p-2 text-xs"
+                        >
+                          <span className="text-white truncate flex-1">{threat.title}</span>
+                          <div className="flex items-center gap-2 ml-2">
+                            <Badge variant="outline" className="text-xs">
+                              {CATEGORY_CONFIG[threat.category as keyof typeof CATEGORY_CONFIG]?.name || threat.category}
+                            </Badge>
+                            <span className={`font-mono ${
+                              threat.severity >= 70 ? 'text-argus-critical' :
+                              threat.severity >= 50 ? 'text-argus-warning' :
+                              'text-argus-guarded'
+                            }`}>
+                              {threat.severity}
+                            </span>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Analysis Result */}
+                {analysisResult && !isAnalyzing && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="grid grid-cols-4 gap-4 p-4 bg-argus-dark-bg rounded-lg"
+                  >
+                    <div className="text-center">
+                      <p className="text-xs text-argus-dark-muted mb-1">위협 지수</p>
+                      <p className="text-2xl font-bold" style={{ color: analysisResult.threatLevel?.color || '#fff' }}>
+                        {analysisResult.totalIndex}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-argus-dark-muted mb-1">위협 레벨</p>
+                      <p className="text-lg font-bold" style={{ color: analysisResult.threatLevel?.color || '#fff' }}>
+                        {analysisResult.threatLevel?.label || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-argus-dark-muted mb-1">신규 위협</p>
+                      <p className="text-2xl font-bold text-argus-warning">
+                        {analysisResult.newThreats}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-argus-dark-muted mb-1">총 위협</p>
+                      <p className="text-2xl font-bold text-white">
+                        {analysisResult.totalThreats}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

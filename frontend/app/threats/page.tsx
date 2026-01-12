@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useThreats } from '@/hooks/useThreats';
-import { ThreatCategory, ThreatStatus } from '@/types';
-import { CATEGORY_CONFIG, STATUS_CONFIG, LEVEL_CONFIG } from '@/lib/constants';
+import { useNodeThreats, useThreatUpdate } from '@/hooks/useArgusAPI';
+import { ThreatCategory, ThreatStatus, ThreatResponse } from '@/types';
+import { CATEGORY_CONFIG, STATUS_CONFIG, LEVEL_CONFIG, ACTIVE_BACKEND } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,19 +16,89 @@ import {
   ExternalLink,
   MapPin,
   Clock,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { formatTimeAgo, getThreatLevel } from '@/lib/utils';
+
+// Node.js 카테고리를 ThreatCategory로 변환
+function nodeCategoryToType(nodeCategory: string): ThreatCategory {
+  const mapping: Record<string, ThreatCategory> = {
+    'TERROR': 'terror',
+    'CYBER': 'cyber',
+    'SMUGGLING': 'smuggling',
+    'DRONE': 'drone',
+    'INSIDER': 'insider',
+    'GEOPOLITICAL': 'geopolitical',
+  };
+  return mapping[nodeCategory] || 'terror';
+}
+
+// ThreatCategory를 Node.js 형식으로 변환
+function typeToNodeCategory(category: ThreatCategory | undefined): string | undefined {
+  if (!category) return undefined;
+  return category.toUpperCase();
+}
 
 export default function ThreatsPage() {
   const [selectedCategory, setSelectedCategory] = useState<ThreatCategory | undefined>();
   const [selectedStatus, setSelectedStatus] = useState<ThreatStatus | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const useNodeBackend = ACTIVE_BACKEND === 'node';
 
-  const { threats, isLoading } = useThreats({
+  // Python 백엔드 훅
+  const pythonData = useThreats({
     category: selectedCategory,
     status: selectedStatus,
     limit: 50,
   });
+
+  // Node.js 백엔드 훅
+  const nodeData = useNodeThreats({
+    category: typeToNodeCategory(selectedCategory),
+    status: selectedStatus,
+    limit: 50,
+  });
+  
+  const { updateThreatStatus, isUpdating } = useThreatUpdate();
+
+  // Node.js 위협 데이터를 기존 형식으로 변환
+  const nodeThreatsConverted: ThreatResponse[] = useMemo(() => {
+    if (!nodeData.threats) return [];
+    
+    return nodeData.threats.map(threat => ({
+      id: threat.id,
+      title: threat.title,
+      description: threat.content,
+      category: nodeCategoryToType(threat.category),
+      severity: threat.severity,
+      status: (threat.status === 'active' ? 'new' : threat.status) as ThreatStatus,
+      source_type: threat.sourceType,
+      source_name: threat.sourceName,
+      source_url: threat.url || '',
+      keywords: threat.keywords || [],
+      summary: threat.summary,
+      location: null,
+      lat: null,
+      lng: null,
+      created_at: threat.timestamp,
+      updated_at: threat.timestamp,
+      time_ago: formatTimeAgo(threat.timestamp),
+    }));
+  }, [nodeData.threats]);
+
+  // 실제 사용할 데이터 선택
+  const threats = useNodeBackend ? nodeThreatsConverted : pythonData.threats;
+  const isLoading = useNodeBackend ? nodeData.loading : pythonData.isLoading;
+
+  // 위협 상태 변경 핸들러 (Node.js 백엔드용)
+  const handleResolve = async (id: string) => {
+    if (useNodeBackend) {
+      await updateThreatStatus(id, 'resolved');
+      nodeData.refetch();
+    }
+  };
 
   // 검색 필터링
   const filteredThreats = threats.filter(threat =>
@@ -204,11 +275,26 @@ export default function ThreatsPage() {
                     </p>
                   </div>
 
-                  {/* 시간 */}
-                  <div className="col-span-1">
+                  {/* 시간 & 액션 */}
+                  <div className="col-span-1 flex items-center justify-between">
                     <span className="text-xs text-argus-dark-muted">
                       {threat.time_ago || formatTimeAgo(threat.created_at)}
                     </span>
+                    {useNodeBackend && threat.status !== 'resolved' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResolve(threat.id);
+                        }}
+                        disabled={isUpdating}
+                      >
+                        <CheckCircle size={12} className="mr-1" />
+                        해결
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
